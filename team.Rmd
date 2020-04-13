@@ -1,0 +1,140 @@
+---
+title: Lab 5
+authors: Anthony Song, Jaydon Cobb
+Github: aasong113, JaydonLCobb
+---
+```{r}
+library(stringr)
+library(readxl)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+```
+
+```{r}
+acc <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/accident.csv", stringsAsFactors = FALSE)
+per <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/person.csv", stringsAsFactors = FALSE)
+```
+
+
+Part one: Accident data
+
+1.) are there some days of the week where more accidents happen than on others (use variable DAY_WEEK)?
+
+###The median, mean and 3rd quartile values of the frequencies in which accidents occur on a particular day of the week are 4261, 4892 and 5359 accidents per day of the week respectively. Looking at the data table, we make the conclusions that days of the week that have frequencies larger than the 3rd quartile are days of the week that accidents occur more often than others. These days that have accident frequencies larger than the 3rd quartile are Saturay and Sunday. This makes sense because these are days of the week are where casual things occur, people are less focused, and this ultimately can cause accidents in operation of vehicles. 
+```{r}
+days_freq <- acc
+days_freq <- data.frame(table(days_freq$DAY_WEEK))
+days_freq$Var1 <- recode(days_freq$Var1, 
+       "1"="Sunday",
+       "2"="Monday",
+       "3"="Tuesday",
+       "4"="Wednesday",
+       "5"="Thursday",
+       "6"="Friday",
+       "7"="Saturday")
+
+summary(days_freq$Freq)
+days_freq %>%
+  ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Day of the Week", y = "Frequency", title = "Frequency of Accidents for a Particular Day of the Week", fill = "Day of the Week")
+days_freq
+```
+
+2.) what time of the day do accidents happen (use variable HOUR)?
+
+### Similar to question one, I followed the same method to determine which hour of the day did accidents most frequently occur. According to the 5 number summary of the frequencies, we can see that the median, mean and 3rd quartile are 1321, 1370 and 1760 respectively. Looking at our barchart and frequency table we can see that the hours: 16, 17, 18, 19, 20 and 21 had frequencies larger than the 3rd quartile. This makes sense because at these hours people are off work performing leisure activities. Their focus is less guarded and it is darker outside, this combination can lead to car accidents. 
+```{r}
+hour_freq <- acc
+hour_freq <- data.frame(table(hour_freq$HOUR))
+hour_freq$Var1 <- recode(hour_freq$Var1, "99"="N/A")
+summary(hour_freq$Freq)
+hour_freq %>%
+  ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Hour of the Day", y = "Frequency", title = "Frequency of Accidents for a Particular Hour of the Day", fill = "Hour of the Week") 
+hour_freq
+
+```
+
+3.) what is the number of accidents with at least one drunk driver (use variable DRUNK_DR)?
+
+###The number of accidents with at least one drunk driver is 8769 accidents. 
+```{r}
+dr_drive <- acc
+dr_drive <- data.frame(table(dr_drive$DRUNK_DR))
+num_dr_drive <- sum(dr_drive[2:4, 2])
+num_dr_drive
+```
+
+4. In the person table, identify drivers (PER_TYP == 1, see FARS manual) and subset on them.
+
+### To identify the drivers we select the rows which PER_TYP == 1. This subsets our dataset from 84921 rows to 52274 rows.
+```{r}
+drivers_only <- per
+drivers_only <- drivers_only[which(drivers_only$PER_TYP == 1),]
+na.omit(drivers_only)
+nrow(drivers_only)
+
+```
+
+5. Join accident and person table (work out which variable(s) to use)
+
+Variables to use (temp_acc):persons, city,Month,day,  hour, TWAY_ID, LATITUDE, LONGGITUD, WEATHER,FATALS
+Variables to use (temp_drive):Month,day,  hour,sex, per_typ, age, drugs, County
+```{r}
+#nrow(acc) = 34247
+temp_drive <- drivers_only %>%
+  distinct(ST_CASE, .keep_all = TRUE) 
+#nrow(temp_drive) = 34157
+
+# Find the differences in the two data sets. 
+differences <- setdiff(acc$ST_CASE, temp_drive$ST_CASE)
+# length(differences) = 90 
+
+# remove values that are in the differences vector. 
+temp_acc <- acc
+temp_acc <- temp_acc[ ! temp_acc$ST_CASE %in% differences, ]
+# nrow(temp_acc) == nrow(temp_drive) is true. 
+
+# Extract certain columns
+acc_col_extract <- temp_acc %>%
+  select(PERSONS, CITY, MONTH, DAY, HOUR, TWAY_ID, LATITUDE, LONGITUD, WEATHER, FATALS, DAY_WEEK)
+per_col_extract <- temp_drive %>%
+  select(SEX, PER_TYP, AGE, DRUGS, COUNTY)
+# merge the data frames. 
+joint_dat <- cbind(acc_col_extract, per_col_extract)
+joint_dat
+```
+
+
+6. Tally the number of accidents by day of the week (DAY_WEEK), hour of the day (HOUR) and gender (SEX). Visualize the results.
+```{r}
+joint_dat_day <- data.frame(table(joint_dat$DAY_WEEK))
+joint_dat_day$Var1 <- recode(joint_dat_day$Var1, 
+       "1"="Sunday",
+       "2"="Monday",
+       "3"="Tuesday",
+       "4"="Wednesday",
+       "5"="Thursday",
+       "6"="Friday",
+       "7"="Saturday")
+
+joint_dat_hour <- data.frame(table(joint_dat$HOUR))
+joint_dat_sex <- data.frame(table(joint_dat$SEX))
+
+
+joint_dat_day
+joint_dat_hour 
+joint_dat_sex 
+
+
+```
+
+
+7. Now plot a choropleth map of accidents on a county level
+
+Read the description for the STATE and COUNTY columns in the FARS manual. The state & county codes are Geographic Locator Codes (GLCs) from the General Services Administration’s (GSA) publication
+Use readxl::read_xlsx to read in the GLCs
+8. Visualize the number of accidents in each county using a choropleth map. To do this, you need to join the accident data, GLCs, and appropriate map data.
+
+9. Can you find seasonal trends in accident occurrences in different states? Is summer or winter more dangerous? Why?
