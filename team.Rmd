@@ -4,13 +4,18 @@ authors: Anthony Song, Jaydon Cobb
 Github: aasong113, JaydonLCobb
 ---
 ```{r}
+install.packages("maps")
+```
+```{r}
 library(stringr)
 library(readxl)
 library(ggplot2)
-library(plyr)
+library(maps)
+library(ggmap)
 library(dplyr)
 library(magrittr)
 library(tidyr)
+library(tidyverse)
 ```
 
 ```{r}
@@ -39,7 +44,6 @@ days_freq$Var1 <- recode(days_freq$Var1,
 summary(days_freq$Freq)
 days_freq %>%
   ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Day of the Week", y = "Frequency", title = "Frequency of Accidents for a Particular Day of the Week", fill = "Day of the Week")
-days_freq
 ```
 
 2.) what time of the day do accidents happen (use variable HOUR)?
@@ -52,7 +56,6 @@ hour_freq$Var1 <- recode(hour_freq$Var1, "99"="N/A")
 summary(hour_freq$Freq)
 hour_freq %>%
   ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Hour of the Day", y = "Frequency", title = "Frequency of Accidents for a Particular Hour of the Day", fill = "Hour of the Week") 
-hour_freq
 
 ```
 
@@ -72,9 +75,7 @@ num_dr_drive
 ```{r}
 drivers_only <- per
 drivers_only <- drivers_only[which(drivers_only$PER_TYP == 1),]
-na.omit(drivers_only)
-nrow(drivers_only)
-
+drivers_only <- na.omit(drivers_only)
 ```
 
 5. Join accident and person table (work out which variable(s) to use)
@@ -103,14 +104,13 @@ per_col_extract <- temp_drive %>%
   select(SEX, PER_TYP, AGE, DRUGS, COUNTY)
 # merge the data frames. 
 joint_dat <- cbind(acc_col_extract, per_col_extract)
-joint_dat
 ```
 
 
 6. Tally the number of accidents by day of the week (DAY_WEEK), hour of the day (HOUR) and gender (SEX). Visualize the results.
 ```{r}
-joint_dat_day <- data.frame(table(joint_dat$DAY_WEEK))
-joint_dat_day$Var1 <- recode(joint_dat_day$Var1, 
+
+joint_dat$DAY_WEEK <- recode(joint_dat$DAY_WEEK, 
        "1"="Sunday",
        "2"="Monday",
        "3"="Tuesday",
@@ -119,22 +119,120 @@ joint_dat_day$Var1 <- recode(joint_dat_day$Var1,
        "6"="Friday",
        "7"="Saturday")
 
+joint_dat$SEX <- recode(joint_dat$SEX, 
+       "1"= "Male", "2" = "Female", "8" = "Not Reported", "9" = "Unknown")
+
+joint_dat_day <- data.frame(table(joint_dat$DAY_WEEK))
+
+
 joint_dat_hour <- data.frame(table(joint_dat$HOUR))
+
+
 joint_dat_sex <- data.frame(table(joint_dat$SEX))
 
+joint_box <- joint_dat
+joint_box <- joint_box[!joint_box$HOUR==99,]
+joint_box <- joint_box[!joint_box$SEX=="Not Reported",]
+joint_box <- joint_box[!joint_box$SEX=="Unknown",]
 
-joint_dat_day
-joint_dat_hour 
-joint_dat_sex 
+### visualizing all of the data. 
+ggplot(joint_box) + geom_boxplot( aes(x = DAY_WEEK, y = HOUR )) + facet_wrap(~SEX)+ theme(axis.text.x = element_text(angle = 60, hjust = 1))+labs(x = "Day of the Week", y = "Hour of the Day", title = "Boxplot of the Hour of the Day, for Each Day of the Week, by Reported Sex")
 
+### Bar charts to tally the number visually. 
+joint_dat_day %>%
+  ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Day of the Week", y = "Frequency", title = "Frequency of Accidents for a Particular Day of the Week", fill = "Day of the Week")
+
+joint_dat_hour %>%
+  ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Hour of the Day", y = "Frequency", title = "Frequency of Accidents for a Particular Hour of the Day", fill = "Hour of the Week") 
+
+joint_dat_sex %>%
+  ggplot(aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat="identity")+labs(x = "Sex", y = "Frequency", title = "Frequency of Accidents for a Particular Sex", fill = "Sex") 
+
+```
+###use readxl::read_xlsx to read in the GLCs
+```{r}
+glc <- readxl::read_xlsx("FRPP GLC - United StatesFeb132020.xlsx")
+```
+### Tidy up the glc data. 
+```{r}
+### rename
+glc<- glc %>%
+  rename(
+    "STATE" = "State Code",
+    "COUNTY" = "County Code"
+  )
+
+drops <- c("Country Code","Old City Name", "Date Record Added")
+glc <- glc[ , !(names(glc) %in% drops)]
+
+
+glc <- transform(glc, STATE = as.numeric(STATE), 
+               COUNTY = as.numeric(COUNTY))
+```
+
+7/8. Now plot a choropleth map of accidents on a county level. Visualize the number of accidents in each county using a choropleth map. To do this, you need to join the accident data, GLCs, and appropriate map data.
+
+###The county ID is accounted for by color. The abundance of dots, with their color corresponding to country ID, represents the number of accidents in a certain region.
+```{r}
+# merge two data frames by STATE and COUNTY
+temp_acc <- acc
+
+merged <- merge(data.frame(temp_acc, row.names=NULL), data.frame(glc, row.names=NULL), by = 0, all = TRUE)[-1]
+merged_complete <- na.omit(merged)
+
+# graph
+graph_dat <- merged_complete
+
+# Get outline of US maps
+states <- map_data("state")
+
+# obtain only mainland state values
+graph_dat <- graph_dat[!graph_dat$COUNTY.x==0,]
+graph_dat <- graph_dat[!graph_dat$COUNTY.x==999,]
+graph_dat <- graph_dat[!graph_dat$COUNTY.x==997,]
+graph_dat <- graph_dat[!graph_dat$COUNTY.x==998,]
+graph_dat<-graph_dat[graph_dat$LONGITUD < 0,]
+graph_dat<-graph_dat[graph_dat$LONGITUD > -130,]
+graph_dat<-graph_dat[graph_dat$LATITUDE < 50,]
+
+
+states %>% ggplot(aes(x = long, y = lat)) + 
+  geom_path(aes(group = group))+geom_point(data = graph_dat, aes(x = LONGITUD, y = LATITUDE, color = COUNTY.x), alpha = 0.7, size = 0.02) +
+  labs(x = "Longitude", y = "Latitude", title = "Choropleth Map of the US: Accidents by County")
 
 ```
 
 
-7. Now plot a choropleth map of accidents on a county level
-
-Read the description for the STATE and COUNTY columns in the FARS manual. The state & county codes are Geographic Locator Codes (GLCs) from the General Services Administration’s (GSA) publication
-Use readxl::read_xlsx to read in the GLCs
-8. Visualize the number of accidents in each county using a choropleth map. To do this, you need to join the accident data, GLCs, and appropriate map data.
 
 9. Can you find seasonal trends in accident occurrences in different states? Is summer or winter more dangerous? Why?
+```{r}
+
+merged_complete$MONTH <- recode(merged_complete$MONTH, 
+       "1"="January",
+       "2"="February",
+       "3"="March",
+       "4"="April",
+       "5"="May",
+       "6"="June",
+       "7"="July",
+       "8" = "August",
+       "9" = "September",
+       "10"="October",
+       "11"="November",
+       "12" = "December")
+
+seasonal <- merged_complete %>% group_by(STATE.x, MONTH)
+
+head(merged_complete)
+
+seasonal
+
+
+
+
+
+```
+
+*check AS
+
+
