@@ -168,10 +168,9 @@ glc <- glc[ , !(names(glc) %in% drops)]
 
 glc <- transform(glc, STATE = as.numeric(STATE), 
                COUNTY = as.numeric(COUNTY))
-glc
 ```
 
-
+# Another method to join the data. Just to see what we are working with. 
 ```{r}
 
 df <- glc %>%
@@ -187,8 +186,6 @@ df1 <- df %>%
   summarize(total_accidents= n()) %>%
   left_join(glc, by = c('STATE', 'COUNTY'))
 
-df1
-
 df2 <- map_data('county')
 
 df2 <- df2 %>%
@@ -198,7 +195,6 @@ df2 <- df2 %>%
 df1 <- df1 %>%
   full_join(df1, by = c('State.Name', 'County.Name'))
 
-df1
 ```
 
 
@@ -207,6 +203,7 @@ df1
 7/8. Now plot a choropleth map of accidents on a county level. Visualize the number of accidents in each county using a choropleth map. To do this, you need to join the accident data, GLCs, and appropriate map data.
 
 ###The county ID is accounted for by color. The abundance of dots, with their color corresponding to country ID, represents the number of accidents in a certain region.
+###We found that we were able to gather the same information just by using the states map data and the accident data.
 ```{r}
 # merge two data frames by STATE and COUNTY
 temp_acc <- acc
@@ -228,11 +225,12 @@ graph_dat <- graph_dat[!graph_dat$COUNTY.x==998,]
 graph_dat<-graph_dat[graph_dat$LONGITUD < 0,]
 graph_dat<-graph_dat[graph_dat$LONGITUD > -130,]
 graph_dat<-graph_dat[graph_dat$LATITUDE < 50,]
+```
 
-
+```{r}
 states %>% ggplot(aes(x = long, y = lat)) + 
   geom_path(aes(group = group))+geom_point(data = graph_dat, aes(x = LONGITUD, y = LATITUDE, color = COUNTY.x), alpha = 0.7, size = 0.02) +
-  labs(x = "Longitude", y = "Latitude", title = "Choropleth Map of the US: Accidents by County")
+  labs(x = "Longitude", y = "Latitude", title = "Choropleth Map of the US: Accidents by County", color = "County")
 
 ```
 
@@ -264,9 +262,13 @@ graph_dat$MONTH = factor(graph_dat$MONTH,levels=c("January","February","March",
                "April","May","June","July","August","September",
                "October","November","December"),ordered=TRUE)
 
+```
+
+```{r}
+
 states %>% ggplot(aes(x = long, y = lat)) + 
   geom_path(aes(group = group))+geom_point(data = graph_dat, aes(x = LONGITUD, y = LATITUDE, color = MONTH), alpha = 0.7, size = 0.1) +
-  labs(x = "Longitude", y = "Latitude", title = "Choropleth Map of the US: Accidents by Month of the Year")
+  labs(x = "Longitude", y = "Latitude", title = "Choropleth Map of the US: Accidents by Month of the Year", color = "Month")+ guides(colour = guide_legend(override.aes = list(size = 7)))
 ```
 
 ```{r}
@@ -290,7 +292,8 @@ seasons <- data.frame(table(graph_dat2$MONTH))
 seasons %>%
   ggplot(aes(x = Var1, y = Freq , fill = Var1)) + geom_bar(stat = "identity")+labs(x = "Seasons", y = "Frequency", title = "Frequency of Accidents for a Particular Season", fill = "Season") 
 
-
+#***
 ```
 
 # The number of accidents balances over the seasons, we do have a higher number in the winter which is to be expected but overall across all 4 seasons we can see the amount of accidents balance out.
+
