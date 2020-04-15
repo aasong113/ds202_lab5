@@ -3,9 +3,7 @@ title: Lab 5
 authors: Anthony Song, Jaydon Cobb
 Github: aasong113, JaydonLCobb
 ---
-```{r}
-install.packages("maps")
-```
+
 ```{r}
 library(stringr)
 library(readxl)
@@ -16,6 +14,7 @@ library(dplyr)
 library(magrittr)
 library(tidyr)
 library(tidyverse)
+library("readxl")
 ```
 
 ```{r}
@@ -81,6 +80,7 @@ drivers_only <- na.omit(drivers_only)
 5. Join accident and person table (work out which variable(s) to use)
 
 Variables to use (temp_acc):persons, city,Month,day,  hour, TWAY_ID, LATITUDE, LONGGITUD, WEATHER,FATALS
+
 Variables to use (temp_drive):Month,day,  hour,sex, per_typ, age, drugs, County
 ```{r}
 #nrow(acc) = 34247
@@ -168,7 +168,41 @@ glc <- glc[ , !(names(glc) %in% drops)]
 
 glc <- transform(glc, STATE = as.numeric(STATE), 
                COUNTY = as.numeric(COUNTY))
+glc
 ```
+
+
+```{r}
+
+df <- glc %>%
+  select('State.Name', STATE = 'STATE', COUNTY = 'County.Name', 'County.Name') %>%
+  unique()
+df$STATE <- as.integer(df$STATE)
+df$COUNTY <- as.integer(df$STATE)
+
+
+df1 <- df %>%
+  select(STATE, COUNTY) %>%
+  group_by(STATE, COUNTY) %>%
+  summarize(total_accidents= n()) %>%
+  left_join(glc, by = c('STATE', 'COUNTY'))
+
+df1
+
+df2 <- map_data('county')
+
+df2 <- df2 %>%
+  mutate(`State Name` = region, `County Name` = subregion) %>%
+  select(`State Name`, `County Name`, long, lat, group, order)
+
+df1 <- df1 %>%
+  full_join(df1, by = c('State.Name', 'County.Name'))
+
+df1
+```
+
+
+
 
 7/8. Now plot a choropleth map of accidents on a county level. Visualize the number of accidents in each county using a choropleth map. To do this, you need to join the accident data, GLCs, and appropriate map data.
 
@@ -205,9 +239,14 @@ states %>% ggplot(aes(x = long, y = lat)) +
 
 
 9. Can you find seasonal trends in accident occurrences in different states? Is summer or winter more dangerous? Why?
-```{r}
 
-merged_complete$MONTH <- recode(merged_complete$MONTH, 
+### Using the choropleth map we are able to visualize some seasonal trends in which accidents occur. As expected the winter months have the largest amount of accidents, especially along the coastlines of the northern lake states like Wisconsin and Michigan. This can be seen by the abundance of yellow points. But it is important to notice, that in the months building up to the winter (September and October) there are also a lot of points, as shown by light green. This shows that the build up to the winter produces a lot of accidents as well. But not to be overshadowed the summer months also show a large showing accident points in the congested areas like the east coast. This may be due to the driving culture and congested highways and speedways.
+
+### In hindsight we may think that the winter is far more dangerous than the summer due to slippery roads and harsh conditions. But when looking at the frequency of accidents that occur during each season we can see that their difference is not extraordinary. Although the winter is considered more dangerous due to a higher frequency of accidents, this is most likely caused by the harsh driving conditions. It should be noted that the summer is the second ahead of the spring and fall. This may be due to excessively fast drivers in the summer and more carelessness, causing less focus on the road. 
+
+```{r}
+#Encode months
+graph_dat$MONTH <- recode(graph_dat$MONTH, 
        "1"="January",
        "2"="February",
        "3"="March",
@@ -220,19 +259,38 @@ merged_complete$MONTH <- recode(merged_complete$MONTH,
        "10"="October",
        "11"="November",
        "12" = "December")
+# as factor
+graph_dat$MONTH = factor(graph_dat$MONTH,levels=c("January","February","March",
+               "April","May","June","July","August","September",
+               "October","November","December"),ordered=TRUE)
 
-seasonal <- merged_complete %>% group_by(STATE.x, MONTH)
+states %>% ggplot(aes(x = long, y = lat)) + 
+  geom_path(aes(group = group))+geom_point(data = graph_dat, aes(x = LONGITUD, y = LATITUDE, color = MONTH), alpha = 0.7, size = 0.1) +
+  labs(x = "Longitude", y = "Latitude", title = "Choropleth Map of the US: Accidents by Month of the Year")
+```
 
-head(merged_complete)
+```{r}
+#Encode seasons 
+graph_dat2 <- graph_dat
+graph_dat2$MONTH <- recode(graph_dat$MONTH, 
+       "January" = "Winter",
+       "February" = "Winter",
+       "March" = "Spring",
+       "April" = "Spring",
+       "May" = "Spring",
+       "June" = "Summer",
+       "July" = "Summer",
+       "August" = "Summer",
+       "September" = "Fall",
+       "October" = "Fall",
+       "November" = "Winter",
+       "December" = "Winter")
+seasons <- data.frame(table(graph_dat2$MONTH))
 
-seasonal
-
-
-
+seasons %>%
+  ggplot(aes(x = Var1, y = Freq , fill = Var1)) + geom_bar(stat = "identity")+labs(x = "Seasons", y = "Frequency", title = "Frequency of Accidents for a Particular Season", fill = "Season") 
 
 
 ```
 
-*check AS
-
-
+# The number of accidents balances over the seasons, we do have a higher number in the winter which is to be expected but overall across all 4 seasons we can see the amount of accidents balance out.
